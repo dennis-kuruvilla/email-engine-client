@@ -72,6 +72,15 @@ const EmailDataPage = () => {
     fetchEmails(page);
   }, [page]);
 
+  const linkOutlook = () => {
+    if (user) {
+      const redirectUrl = `${baseUrl}/api/ms-auth/login?userId=${user.id}`;
+      window.location.href = redirectUrl;
+    } else {
+      alert("User information is missing. Please try again.");
+    }
+  };
+
   const logout = async () => {
     const accessToken = localStorage.getItem("accessToken");
     if (!accessToken) return;
@@ -94,6 +103,15 @@ const EmailDataPage = () => {
       alert("Error logging out. Please try again.");
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    if (status === "linked") {
+      alert("Outlook account linked successfully!");
+      window.history.replaceState({}, document.title, window.location.pathname); // Clean the query parameter
+    }
+  }, []);
 
   if (error) {
     return (
@@ -118,9 +136,7 @@ const EmailDataPage = () => {
       )}
 
       <div className="actions">
-        <button onClick={() => alert("Link Outlook functionality here.")}>
-          Link Outlook
-        </button>
+        <button onClick={linkOutlook}>Link Outlook</button>
         <button onClick={() => alert("Sync Emails functionality here.")}>
           Sync Emails
         </button>
@@ -134,6 +150,7 @@ const EmailDataPage = () => {
             <th>To</th>
             <th>Date</th>
             <th>Read</th>
+            <th>Flagged</th>
           </tr>
         </thead>
         <tbody>
@@ -144,6 +161,7 @@ const EmailDataPage = () => {
               <td>{email.to}</td>
               <td>{new Date(email.date).toLocaleString()}</td>
               <td>{email.read ? "Yes" : "No"}</td>
+              <td>{email.flagged ? "Yes" : "No"}</td>
             </tr>
           ))}
         </tbody>
