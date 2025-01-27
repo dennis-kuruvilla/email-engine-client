@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import "../App.css";
 import { io } from "socket.io-client";
 
@@ -9,119 +9,71 @@ const EmailDataPage = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState("");
-  const baseUrl = "http://localhost:3000";
-  const pageSize = 10;
   const [socket, setSocket] = useState(null);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      const accessToken = localStorage.getItem("accessToken");
-      if (!accessToken) return;
+  const baseUrl = "http://localhost:3000";
+  const pageSize = 10;
+  const accessToken = localStorage.getItem("accessToken");
 
-      try {
-        const response = await fetch(`${baseUrl}/api/users/me`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        if (response.status === 401) {
-          localStorage.removeItem("accessToken");
-          setError("Session expired. Please log in again.");
-        } else if (response.ok) {
-          const data = await response.json();
-          setUser(data);
-          setLinkedEmails(data.emails);
-        } else {
-          throw new Error("Failed to fetch user details.");
-        }
-      } catch (err) {
-        setError(err.message);
-      }
-    };
-
-    fetchUser();
-  }, [baseUrl]);
-
-  const fetchEmails = async (pageNumber) => {
-    const accessToken = localStorage.getItem("accessToken");
+  const fetchData = useCallback(async (url, setData) => {
     if (!accessToken) return;
-
     try {
-      const response = await fetch(
-        `${baseUrl}/api/search/emails?page=${pageNumber}&limit=${pageSize}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
       if (response.ok) {
         const data = await response.json();
-        setEmails(data.data);
-        const totalEmails = data.total.value;
-        setTotalPages(Math.ceil(totalEmails / pageSize));
+        setData(data);
       } else {
-        throw new Error("Failed to fetch emails.");
+        throw new Error("Failed to fetch data.");
       }
     } catch (err) {
-      alert("Error fetching emails. Please try again.");
+      setError(err.message);
     }
-  };
+  }, [accessToken]);
 
-  useEffect(() => {
-    fetchEmails(page);
-  }, [page]);
+  const fetchUser = useCallback(() => {
+    fetchData(`${baseUrl}/api/users/me`, (data) => {
+      setUser(data);
+      setLinkedEmails(data.emails);
+    });
+  }, [fetchData, baseUrl]);
 
-  const linkOutlook = () => {
-    if (user) {
-      const redirectUrl = `${baseUrl}/api/ms-auth/login?userId=${user.id}`;
-      window.location.href = redirectUrl;
-    } else {
-      alert("User information is missing. Please try again.");
-    }
-  };
+  const fetchEmails = useCallback((pageNumber) => {
+    fetchData(`${baseUrl}/api/search/emails?page=${pageNumber}&limit=${pageSize}`, (data) => {
+      setEmails(data.data);
+      setTotalPages(Math.ceil(data.total.value / pageSize));
+    });
+  }, [fetchData, baseUrl]);
 
-  const syncEmails = async () => {
-    const accessToken = localStorage.getItem("accessToken");
-    if (!accessToken) {
-      alert("Session expired. Please log in again.");
-      return;
-    }
+  const syncEmails = useCallback(async () => {
+    if (!accessToken) return alert("Session expired. Please log in again.");
 
     try {
       const response = await fetch(`${baseUrl}/api/ms-auth/sync-emails`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (response.status === 201) {
-        alert(
-          "Emails are syncing in the background. Real-time updates are now enabled!"
-        );
+        alert("Emails are syncing in the background. Real-time updates are now enabled!");
       } else {
         throw new Error("Failed to sync emails. Please try again.");
       }
     } catch (err) {
       alert(err.message);
     }
-  };
+  }, [accessToken, baseUrl]);
 
-  const logout = async () => {
-    const accessToken = localStorage.getItem("accessToken");
+  const logout = useCallback(async () => {
     if (!accessToken) return;
 
     try {
       const response = await fetch(`${baseUrl}/api/auth/logout`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (response.ok) {
@@ -133,102 +85,51 @@ const EmailDataPage = () => {
     } catch (err) {
       alert("Error logging out. Please try again.");
     }
+  }, [accessToken, baseUrl]);
+
+  const linkOutlook = () => {
+    if (user) {
+      const redirectUrl = `${baseUrl}/api/ms-auth/login?userId=${user.id}`;
+      window.location.href = redirectUrl;
+    } else {
+      alert("User information is missing. Please try again.");
+    }
   };
 
   useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
+
+  useEffect(() => {
+    if (accessToken) {
+      fetchEmails(page);
+    }
+  }, [page, accessToken, fetchEmails]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const status = params.get("status");
-    if (status === "linked") {
+    if (params.get("status") === "linked") {
       alert("Outlook account linked successfully!");
-      const fetchUser = async () => {
-        const accessToken = localStorage.getItem("accessToken");
-        if (!accessToken) return;
-
-        try {
-          const response = await fetch(`${baseUrl}/api/users/me`, {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setUser(data);
-            setLinkedEmails(data.emails);
-          }
-        } catch (err) {
-          setError(err.message);
-        }
-      };
-
       fetchUser();
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
+  }, [fetchUser]);
 
   useEffect(() => {
     if (user) {
       const socketInstance = io(baseUrl);
 
       socketInstance.on("connect", () => {
-        console.log("WebSocket connected:", socketInstance.id);
         socketInstance.emit("authenticate", { userId: user.id });
       });
 
-      socketInstance.on("authenticated", (data) => {
-        console.log("WebSocket authenticated:", data);
-      });
-
       socketInstance.on("user-event", async (payload) => {
-        console.log("Received user-event:", payload);
-
         if (payload.type === "MAILBOX_UPDATE") {
-          try {
-            const accessToken = localStorage.getItem("accessToken");
-            if (!accessToken) return;
-
-            const response = await fetch(`${baseUrl}/api/users/me`, {
-              method: "GET",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              setUser(data);
-              setLinkedEmails(data.emails);
-            }
-          } catch (err) {
-            console.error("Error refreshing user data:", err);
-          }
+          fetchUser();
         }
 
         if (payload.type === "MAIL_UPDATE") {
-          try {
-            const accessToken = localStorage.getItem("accessToken");
-            if (!accessToken) return;
-
-            const response = await fetch(
-              `${baseUrl}/api/search/emails?page=1&limit=${pageSize}`,
-              {
-                method: "GET",
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                },
-              }
-            );
-
-            if (response.ok) {
-              const data = await response.json();
-              setEmails(data.data); // Update emails data
-              const totalEmails = data.total.value;
-              setTotalPages(Math.ceil(totalEmails / pageSize));
-            }
-          } catch (err) {
-            console.error("Error refreshing emails data:", err);
-          }
+          fetchEmails(1);
         }
       });
 
@@ -238,19 +139,15 @@ const EmailDataPage = () => {
 
       setSocket(socketInstance);
 
-      return () => {
-        socketInstance.disconnect();
-      };
+      return () => socketInstance.disconnect();
     }
-  }, [user, baseUrl, emails, linkedEmails]);
+  }, [user, baseUrl, fetchUser, fetchEmails]);
 
   if (error) {
     return (
       <div className="error-page">
         <h2>{error}</h2>
-        <button onClick={() => (window.location.href = "/")}>
-          Log In Again
-        </button>
+        <button onClick={() => (window.location.href = "/")}>Log In Again</button>
       </div>
     );
   }
@@ -260,9 +157,7 @@ const EmailDataPage = () => {
       {user && (
         <div className="user-info">
           <p>Logged in as: {user.username}</p>
-          <button onClick={logout} className="logout-button">
-            Logout
-          </button>
+          <button onClick={logout} className="logout-button">Logout</button>
         </div>
       )}
 
@@ -285,28 +180,10 @@ const EmailDataPage = () => {
                 {linkedEmails.map((email) => (
                   <tr key={email.id}>
                     <td>{email.email}</td>
-                    <td
-                      style={{
-                        color:
-                          email.realtimeSyncStatus === "ACTIVE"
-                            ? "green"
-                            : "red",
-                      }}
-                    >
+                    <td style={{ color: email.realtimeSyncStatus === "ACTIVE" ? "green" : "red" }}>
                       {email.realtimeSyncStatus}
                     </td>
-                    <td
-                      style={{
-                        color:
-                          email.initialSyncStatus === "COMPLETED"
-                            ? "green"
-                            : email.initialSyncStatus === "PENDING"
-                            ? "blue"
-                            : email.initialSyncStatus === "INITIATED"
-                            ? "yellow"
-                            : "red",
-                      }}
-                    >
+                    <td style={{ color: email.initialSyncStatus === "COMPLETED" ? "green" : email.initialSyncStatus === "PENDING" ? "blue" : email.initialSyncStatus === "INITIATED" ? "yellow" : "red" }}>
                       {email.initialSyncStatus}
                     </td>
                   </tr>
@@ -343,23 +220,9 @@ const EmailDataPage = () => {
       </table>
 
       <div className="pagination">
-        <button
-          onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-          disabled={page === 1}
-        >
-          Previous
-        </button>
-        <span>
-          Page {page} of {totalPages}
-        </span>
-        <button
-          onClick={() =>
-            setPage((prev) => (prev < totalPages ? prev + 1 : prev))
-          }
-          disabled={page === totalPages}
-        >
-          Next
-        </button>
+        <button onClick={() => setPage((prev) => Math.max(prev - 1, 1))} disabled={page === 1}>Previous</button>
+        <span>Page {page} of {totalPages}</span>
+        <button onClick={() => setPage((prev) => (prev < totalPages ? prev + 1 : prev))} disabled={page === totalPages}>Next</button>
       </div>
     </div>
   );
