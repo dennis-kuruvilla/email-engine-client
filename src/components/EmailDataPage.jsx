@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "../App.css";
+import { io } from "socket.io-client";
 
 const EmailDataPage = () => {
   const [user, setUser] = useState(null);
@@ -9,6 +10,7 @@ const EmailDataPage = () => {
   const [error, setError] = useState("");
   const baseUrl = "http://localhost:3000";
   const pageSize = 10;
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -139,6 +141,36 @@ const EmailDataPage = () => {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      const socketInstance = io(baseUrl);
+
+      socketInstance.on("connect", () => {
+        console.log("WebSocket connected:", socketInstance.id);
+
+        socketInstance.emit("authenticate", { userId: user.id });
+      });
+
+      socketInstance.on("authenticated", (data) => {
+        console.log("WebSocket authenticated:", data);
+      });
+
+      socketInstance.on("user-event", (payload) => {
+        console.log("Received user-event:", payload);
+      });
+
+      socketInstance.on("disconnect", () => {
+        console.log("WebSocket disconnected");
+      });
+
+      setSocket(socketInstance);
+
+      return () => {
+        socketInstance.disconnect();
+      };
+    }
+  }, [user, baseUrl]);
 
   if (error) {
     return (
