@@ -173,7 +173,6 @@ const EmailDataPage = () => {
 
       socketInstance.on("connect", () => {
         console.log("WebSocket connected:", socketInstance.id);
-
         socketInstance.emit("authenticate", { userId: user.id });
       });
 
@@ -181,8 +180,56 @@ const EmailDataPage = () => {
         console.log("WebSocket authenticated:", data);
       });
 
-      socketInstance.on("user-event", (payload) => {
+      socketInstance.on("user-event", async (payload) => {
         console.log("Received user-event:", payload);
+
+        if (payload.type === "MAILBOX_UPDATE") {
+          try {
+            const accessToken = localStorage.getItem("accessToken");
+            if (!accessToken) return;
+
+            const response = await fetch(`${baseUrl}/api/users/me`, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              setUser(data);
+              setLinkedEmails(data.emails);
+            }
+          } catch (err) {
+            console.error("Error refreshing user data:", err);
+          }
+        }
+
+        if (payload.type === "MAIL_UPDATE") {
+          try {
+            const accessToken = localStorage.getItem("accessToken");
+            if (!accessToken) return;
+
+            const response = await fetch(
+              `${baseUrl}/api/search/emails?page=1&limit=${pageSize}`,
+              {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                },
+              }
+            );
+
+            if (response.ok) {
+              const data = await response.json();
+              setEmails(data.data); // Update emails data
+              const totalEmails = data.total.value;
+              setTotalPages(Math.ceil(totalEmails / pageSize));
+            }
+          } catch (err) {
+            console.error("Error refreshing emails data:", err);
+          }
+        }
       });
 
       socketInstance.on("disconnect", () => {
@@ -195,7 +242,7 @@ const EmailDataPage = () => {
         socketInstance.disconnect();
       };
     }
-  }, [user, baseUrl]);
+  }, [user, baseUrl, emails, linkedEmails]);
 
   if (error) {
     return (
@@ -241,7 +288,9 @@ const EmailDataPage = () => {
                     <td
                       style={{
                         color:
-                          email.realtimeSyncStatus === "ACTIVE" ? "green" : "red",
+                          email.realtimeSyncStatus === "ACTIVE"
+                            ? "green"
+                            : "red",
                       }}
                     >
                       {email.realtimeSyncStatus}
