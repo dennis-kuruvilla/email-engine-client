@@ -5,6 +5,7 @@ import { io } from "socket.io-client";
 const EmailDataPage = () => {
   const [user, setUser] = useState(null);
   const [emails, setEmails] = useState([]);
+  const [linkedEmails, setLinkedEmails] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState("");
@@ -31,6 +32,7 @@ const EmailDataPage = () => {
         } else if (response.ok) {
           const data = await response.json();
           setUser(data);
+          setLinkedEmails(data.emails);
         } else {
           throw new Error("Failed to fetch user details.");
         }
@@ -138,6 +140,29 @@ const EmailDataPage = () => {
     const status = params.get("status");
     if (status === "linked") {
       alert("Outlook account linked successfully!");
+      const fetchUser = async () => {
+        const accessToken = localStorage.getItem("accessToken");
+        if (!accessToken) return;
+
+        try {
+          const response = await fetch(`${baseUrl}/api/users/me`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data);
+            setLinkedEmails(data.emails);
+          }
+        } catch (err) {
+          setError(err.message);
+        }
+      };
+
+      fetchUser();
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -194,9 +219,53 @@ const EmailDataPage = () => {
         </div>
       )}
 
-      <div className="actions">
-        <button onClick={linkOutlook}>Link Outlook</button>
-        <button onClick={syncEmails}>Sync Emails</button>
+      <div className="actions-container">
+        <div className="actions">
+          <button onClick={linkOutlook}>Link Outlook</button>
+          <button onClick={syncEmails}>Sync Emails</button>
+        </div>
+        {linkedEmails.length > 0 && (
+          <div className="linked-emails">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Connection</th>
+                  <th>Synced</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linkedEmails.map((email) => (
+                  <tr key={email.id}>
+                    <td>{email.email}</td>
+                    <td
+                      style={{
+                        color:
+                          email.realtimeSyncStatus === "ACTIVE" ? "green" : "red",
+                      }}
+                    >
+                      {email.realtimeSyncStatus}
+                    </td>
+                    <td
+                      style={{
+                        color:
+                          email.initialSyncStatus === "COMPLETED"
+                            ? "green"
+                            : email.initialSyncStatus === "PENDING"
+                            ? "blue"
+                            : email.initialSyncStatus === "INITIATED"
+                            ? "yellow"
+                            : "red",
+                      }}
+                    >
+                      {email.initialSyncStatus}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <table className="email-table">
