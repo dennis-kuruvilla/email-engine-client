@@ -81,6 +81,33 @@ const EmailDataPage = () => {
     }
   };
 
+  const syncEmails = async () => {
+    const accessToken = localStorage.getItem("accessToken");
+    if (!accessToken) {
+      alert("Session expired. Please log in again.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${baseUrl}/api/ms-auth/sync-emails`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (response.status === 201) {
+        alert(
+          "Emails are syncing in the background. Real-time updates are now enabled!"
+        );
+      } else {
+        throw new Error("Failed to sync emails. Please try again.");
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const logout = async () => {
     const accessToken = localStorage.getItem("accessToken");
     if (!accessToken) return;
@@ -109,7 +136,7 @@ const EmailDataPage = () => {
     const status = params.get("status");
     if (status === "linked") {
       alert("Outlook account linked successfully!");
-      window.history.replaceState({}, document.title, window.location.pathname); // Clean the query parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -137,9 +164,7 @@ const EmailDataPage = () => {
 
       <div className="actions">
         <button onClick={linkOutlook}>Link Outlook</button>
-        <button onClick={() => alert("Sync Emails functionality here.")}>
-          Sync Emails
-        </button>
+        <button onClick={syncEmails}>Sync Emails</button>
       </div>
 
       <table className="email-table">
