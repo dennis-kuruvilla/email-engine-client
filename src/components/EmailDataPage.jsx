@@ -27,7 +27,12 @@ const EmailDataPage = () => {
         const data = await response.json();
         setData(data);
       } else {
-        throw new Error("Failed to fetch data.");
+        if (response.status === 401) {
+          localStorage.removeItem('accessToken');
+          window.location.href = '/';
+        } else {
+          throw new Error('Failed to fetch data.');
+        }
       }
     } catch (err) {
       setError(err.message);

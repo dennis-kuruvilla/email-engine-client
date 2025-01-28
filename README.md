@@ -4,6 +4,8 @@ This is the front end for the "Email-engine-core" backend service developed usin
 1. **Login/Signup Page**: Where the user can sign up or log in.
 2. **Email Data Page**: Where the user can link their Outlook email, initiate syncing, and receive real-time updates for their emails.
 
+Walkthrough Video: https://www.youtube.com/watch?v=zJ0_yFZK3wo
+
 The client makes a WebSocket connection to the backend to receive real-time updates about the mailbox and email.
 
 ## Features
